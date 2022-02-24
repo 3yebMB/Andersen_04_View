@@ -47,6 +47,7 @@ class AnalogClockView @JvmOverloads constructor(
         super.onDraw(canvas)
 
         drawOuterCircle(canvas)
+        drawScale(canvas)
     }
 
     private fun drawOuterCircle(canvas: Canvas?) {
@@ -59,8 +60,49 @@ class AnalogClockView @JvmOverloads constructor(
         )
     }
 
+    private fun drawScale(canvas: Canvas?) {
+        var scaleLength: Float?
+        canvas?.save()
+
+        for (i in 0..59) {
+            if (i % 5 == 0) {
+                mBlackPaint.strokeWidth = 5f
+                scaleLength = 20f
+            } else {
+                mBlackPaint.strokeWidth = 3f
+                scaleLength = 10f
+            }
+            canvas?.drawLine(
+                (measuredWidth / 2).toFloat(),
+                5f,
+                (measuredWidth / 2).toFloat(),
+                (5 + scaleLength),
+                mBlackPaint
+            )
+            canvas?.rotate(
+                360 / 60.toFloat(),
+                (measuredWidth / 2).toFloat(),
+                (measuredHeight / 2).toFloat()
+            )
+        }
+        canvas?.restore()
+    }
+
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+
+        val widthSpecMode = MeasureSpec.getMode(widthMeasureSpec)
+        val widthSpecSize = MeasureSpec.getSize(widthMeasureSpec)
+        val heightSpecMode = MeasureSpec.getMode(heightMeasureSpec)
+        val heightSpecSize = MeasureSpec.getSize(heightMeasureSpec)
+        val result =
+            if (widthSpecMode == MeasureSpec.AT_MOST && heightSpecMode == MeasureSpec.AT_MOST) {
+                DEFAULT_WIDTH
+            } else {
+                widthSpecSize.coerceAtMost(heightSpecSize)
+            }
+
+        setMeasuredDimension(result, result)
     }
 
     companion object {
