@@ -1,9 +1,12 @@
 package dev.m13d.customview
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.os.Handler
+import android.os.Message
 import android.util.AttributeSet
 import android.view.View
 import java.util.*
@@ -19,9 +22,19 @@ class AnalogClockView @JvmOverloads constructor(
     private lateinit var mBlackPaint: Paint
     private lateinit var mRedPaint: Paint
     private lateinit var mBlackPaint2: Paint
+
     private var hour: Int = 0
     private var minute: Int = 0
     private var second: Int = 0
+
+    private var refreshThread: Thread? = null
+    private var mHandler = @SuppressLint("HandlerLeak")
+    object : Handler() {
+        override fun handleMessage(msg: Message) {
+            super.handleMessage(msg)
+            if (msg.what == 0) invalidate()
+        }
+    }
 
     init {
         initPaints()
@@ -156,6 +169,27 @@ class AnalogClockView @JvmOverloads constructor(
             }
 
         setMeasuredDimension(result, result)
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        refreshThread = Thread {
+            while (true) {
+                try {
+                    Thread.sleep(1000)
+                    mHandler.sendEmptyMessage(0)
+                } catch (e: InterruptedException) {
+                    break
+                }
+            }
+        }
+        refreshThread?.start()
+    }
+
+    override fun onDetachedFromWindow() {
+        super.onDetachedFromWindow()
+        mHandler.removeCallbacksAndMessages(null)
+        refreshThread?.interrupt()
     }
 
     companion object {
