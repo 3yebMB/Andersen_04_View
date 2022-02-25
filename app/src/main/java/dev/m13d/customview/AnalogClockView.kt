@@ -19,13 +19,27 @@ class AnalogClockView @JvmOverloads constructor(
     defStyleAttr: Int = 0
 ) : View(context, attrs, defStyleAttr) {
 
-    private lateinit var mBlackPaint: Paint
-    private lateinit var mRedPaint: Paint
-    private lateinit var mBlackPaint2: Paint
+    private val partsCount = 3
+    private val pointerRatio = 2f / partsCount
 
-    private var hour: Int = 0
-    private var minute: Int = 0
-    private var second: Int = 0
+    private val paint = Paint()
+    var clockColor = Color.BLACK
+    var secondColor = Color.RED
+    var minuteColor = Color.BLUE
+    var hourColor = Color.BLACK
+    var clockStroke = 10f
+    var hourStroke = 10f
+    var minuteStroke = 15f
+    var secondStroke = 5f
+
+    var clockTagLength = 0f
+    var hourLength = 0f
+    var minuteLength = 0f
+    var secondLength = 0f
+
+    private var width = 0f
+    private var height = 0f
+    private var radius = 0f
 
     private var refreshThread: Thread? = null
     private var mHandler = @SuppressLint("HandlerLeak")
@@ -37,121 +51,106 @@ class AnalogClockView @JvmOverloads constructor(
     }
 
     init {
-        initPaints()
-    }
+        context.theme.obtainStyledAttributes(attrs, R.styleable.AnalogClockView, 0, 0)
+            .apply {
+                try {
+                    secondColor = getColor(R.styleable.AnalogClockView_secondColor, secondColor)
+                    minuteColor = getColor(R.styleable.AnalogClockView_minuteColor, minuteColor)
+                    hourColor = getColor(R.styleable.AnalogClockView_hourColor, hourColor)
+                    clockColor = getColor(R.styleable.AnalogClockView_clockColor, clockColor)
 
-    private fun initPaints() {
-        mBlackPaint = Paint()
-        with(mBlackPaint) {
-            color = Color.BLACK
-            strokeWidth = 5f
-            isAntiAlias = true
-            style = Paint.Style.STROKE
-        }
-        mBlackPaint2 = Paint()
-        with(mBlackPaint2) {
-            color = Color.BLACK
-            isAntiAlias = true
-            style = Paint.Style.FILL
-        }
-        mRedPaint = Paint()
-        with(mRedPaint) {
-            color = Color.RED
-            strokeWidth = 5f
-            isAntiAlias = true
-        }
+                    hourStroke = getDimension(R.styleable.AnalogClockView_hourStroke, hourStroke)
+                    minuteStroke =
+                        getDimension(R.styleable.AnalogClockView_minuteStroke, minuteStroke)
+                    secondStroke =
+                        getDimension(R.styleable.AnalogClockView_secondStroke, secondStroke)
+                    clockStroke = getDimension(R.styleable.AnalogClockView_clockStroke, clockStroke)
+                } finally {
+                    recycle()
+                }
+            }
     }
 
     override fun onDraw(canvas: Canvas?) {
         super.onDraw(canvas)
 
-        drawOuterCircle(canvas)
+        with(paint) {
+            style = Paint.Style.STROKE
+            isAntiAlias = true
+            strokeWidth = clockStroke
+            color = clockColor
+        }
+
+        drawOuterCircle(canvas, paint)
         drawScale(canvas)
-        getCurrentTime()
-        drawHand(canvas)
+        getCurrentTime(canvas)
     }
 
-    private fun drawOuterCircle(canvas: Canvas?) {
-        mBlackPaint.strokeWidth = 5f
-        canvas?.drawCircle(
-            (measuredWidth / 2).toFloat(),
-            (measuredHeight / 2).toFloat(),
-            ((measuredWidth / 2) - 5).toFloat(),
-            mBlackPaint
-        )
+    private fun drawOuterCircle(canvas: Canvas?, paint: Paint) {
+        val centerX = width / 2
+        val centerY = height / 2
+        canvas?.drawCircle(centerX, centerY, radius - DEFAULT_OFFSET, paint)
     }
 
     private fun drawScale(canvas: Canvas?) {
-        var scaleLength: Float?
         canvas?.save()
 
+        val centerX = width / 2
+        val centerY = height / 2
+
+        paint.style = Paint.Style.FILL
+        canvas?.translate(centerX, centerY)
+        val clockMarkY = radius
+
         for (i in 0..59) {
-            if (i % 5 == 0) {
-                mBlackPaint.strokeWidth = 5f
-                scaleLength = 20f
-            } else {
-                mBlackPaint.strokeWidth = 3f
-                scaleLength = 10f
-            }
             canvas?.drawLine(
-                (measuredWidth / 2).toFloat(),
-                5f,
-                (measuredWidth / 2).toFloat(),
-                (5 + scaleLength),
-                mBlackPaint
+                CENTER,
+                clockMarkY,
+                CENTER,
+                clockMarkY - if (i % 5 == 0) clockTagLength else clockTagLength / 2,
+                paint
             )
-            canvas?.rotate(
-                360 / 60.toFloat(),
-                (measuredWidth / 2).toFloat(),
-                (measuredHeight / 2).toFloat()
-            )
+            canvas?.rotate(SECOND_STEP)
         }
-        canvas?.restore()
     }
 
-    private fun getCurrentTime() {
+    private fun getCurrentTime(canvas: Canvas?) {
         val calendar = Calendar.getInstance()
-        hour = calendar.get(Calendar.HOUR)
-        minute = calendar.get(Calendar.MINUTE)
-        second = calendar.get(Calendar.SECOND)
+        val hour = calendar.get(Calendar.HOUR)
+        val minute = calendar.get(Calendar.MINUTE)
+        val second = calendar.get(Calendar.SECOND)
+
+        val hourAngle = hour * HOUR_STEP + HOUR_STEP / DIAL_POINTS * minute
+        drawPointer(canvas, hourColor, hourStroke, hourLength, hourAngle)
+
+        val minuteAngle = minute * SECOND_STEP + SECOND_STEP / DIAL_POINTS * second
+        drawPointer(canvas, minuteColor, minuteStroke, minuteLength, minuteAngle)
+
+        val secondAngle = second * SECOND_STEP
+        drawPointer(canvas, secondColor, secondStroke, secondLength, secondAngle)
     }
 
-    private fun drawHand(canvas: Canvas?) {
-        drawSecond(canvas, mRedPaint)
-        mBlackPaint.strokeWidth = 10f
-        drawMinute(canvas, mBlackPaint)
-        mBlackPaint.strokeWidth = 15f
-        drawHour(canvas, mBlackPaint)
+    private fun drawPointer(
+        canvas: Canvas?,
+        color: Int,
+        width: Float,
+        length: Float,
+        angle: Float
+    ) {
+        paint.color = color
+        paint.strokeWidth = width
+        drawTime(canvas, length, angle)
     }
 
-    private fun drawSecond(canvas: Canvas?, paint: Paint?) {
-        val longR = measuredWidth / 2 - 60
-        val shortR = 60
-        val startX = (measuredWidth / 2 - shortR * sin(second.times(Math.PI / SECOND_DIVIDER))).toFloat()
-        val startY = (measuredWidth / 2 + shortR * cos(second.times(Math.PI / SECOND_DIVIDER))).toFloat()
-        val endX = (measuredWidth / 2 + longR * sin(second.times(Math.PI / SECOND_DIVIDER))).toFloat()
-        val endY = (measuredWidth / 2 - longR * cos(second.times(Math.PI / SECOND_DIVIDER))).toFloat()
-        paint?.let { canvas?.drawLine(startX, startY, endX, endY, it) }
-    }
-
-    private fun drawMinute(canvas: Canvas?, paint: Paint?) {
-        val longR = measuredWidth / 2 - 90
-        val shortR = 50
-        val startX = (measuredWidth / 2 - shortR * sin((minute*60+second).times(Math.PI / MINUTE_DIVIDER))).toFloat()
-        val startY = (measuredWidth / 2 + shortR * cos((minute*60+second).times(Math.PI / MINUTE_DIVIDER))).toFloat()
-        val endX = (measuredWidth / 2 + longR * sin((minute*60+second).times(Math.PI / MINUTE_DIVIDER))).toFloat()
-        val endY = (measuredWidth / 2 - longR * cos((minute*60+second).times(Math.PI / MINUTE_DIVIDER))).toFloat()
-        paint?.let { canvas?.drawLine(startX, startY, endX, endY, it) }
-    }
-
-    private fun drawHour(canvas: Canvas?, paint: Paint?) {
-        val longR = measuredWidth / 2 - 120
-        val shortR = 40
-        val startX = (measuredWidth / 2 - shortR * sin((hour*3600+minute*60+second).times(Math.PI / HOUR_DIVIDER))).toFloat()
-        val startY = (measuredWidth / 2 + shortR * cos((hour*3600+minute*60+second).times(Math.PI / HOUR_DIVIDER))).toFloat()
-        val endX = (measuredWidth / 2 + longR * sin((hour*3600+minute*60+second).times(Math.PI / HOUR_DIVIDER))).toFloat()
-        val endY = (measuredWidth / 2 - longR * cos((hour*3600+minute*60+second).times(Math.PI / HOUR_DIVIDER))).toFloat()
-        paint?.let { canvas?.drawLine(startX, startY, endX, endY, it) }
+    private fun drawTime(canvas: Canvas?, arrowLength: Float, angle: Float) {
+        canvas?.rotate(angle)
+        canvas?.drawLine(
+            0f,
+            arrowLength / partsCount, 0f,
+            arrowLength / partsCount - arrowLength,
+            paint
+        )
+        canvas?.rotate(CIRCLE_DEGREES - angle)
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
@@ -167,6 +166,15 @@ class AnalogClockView @JvmOverloads constructor(
             } else {
                 widthSpecSize.coerceAtMost(heightSpecSize)
             }
+
+        width = result.toFloat()
+        height = result.toFloat()
+
+        radius = result / 2.0f
+        clockTagLength = radius / 12
+        secondLength = 2 * radius * pointerRatio
+        minuteLength = secondLength * GOLDEN_RATIO / pointerRatio
+        hourLength = minuteLength * GOLDEN_RATIO
 
         setMeasuredDimension(result, result)
     }
@@ -194,8 +202,12 @@ class AnalogClockView @JvmOverloads constructor(
 
     companion object {
         private const val DEFAULT_WIDTH = 200
-        private const val SECOND_DIVIDER = 30
-        private const val MINUTE_DIVIDER = 1800
-        private const val HOUR_DIVIDER = 21600
+        private const val HOUR_STEP = 30f
+        private const val SECOND_STEP = 6f
+        private const val DEFAULT_OFFSET = 5
+        private const val CENTER = 0f
+        private const val CIRCLE_DEGREES = 360f
+        private const val GOLDEN_RATIO = 0.62f
+        private const val DIAL_POINTS = 60
     }
 }
