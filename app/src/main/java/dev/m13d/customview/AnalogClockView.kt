@@ -22,6 +22,9 @@ class AnalogClockView @JvmOverloads constructor(
     private val partsCount = 3
     private val pointerRatio = 2f / partsCount
 
+    private lateinit var mTextPaint: Paint
+    private val textArray = arrayOf("12", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11")
+
     private val paint = Paint()
     var clockColor = Color.BLACK
     var secondColor = Color.RED
@@ -69,6 +72,16 @@ class AnalogClockView @JvmOverloads constructor(
                     recycle()
                 }
             }
+        initTimeText()
+    }
+
+    private fun initTimeText() {
+        mTextPaint = Paint()
+        with(mTextPaint) {
+            color = Color.BLACK
+            textSize = 50f
+            isAntiAlias = true
+        }
     }
 
     override fun onDraw(canvas: Canvas?) {
@@ -82,6 +95,7 @@ class AnalogClockView @JvmOverloads constructor(
         }
 
         drawOuterCircle(canvas, paint)
+        drawTimeText(canvas)
         drawScale(canvas)
         getCurrentTime(canvas)
     }
@@ -111,6 +125,20 @@ class AnalogClockView @JvmOverloads constructor(
                 paint
             )
             canvas?.rotate(SECOND_STEP)
+        }
+    }
+
+    private fun drawTimeText(canvas: Canvas?) {
+        val textR = (measuredWidth / 2 - 50)
+        for (i in 0..11) {
+            val startX =
+                (measuredWidth / 2 + textR * sin(Math.PI / 6 * i) * DEFAULT_TEXT_OFFSET -
+                        mTextPaint.measureText(textArray[i]) / 2).toFloat()
+            val startY =
+                (measuredHeight / 2 - textR * cos(Math.PI / 6 * i) * DEFAULT_TEXT_OFFSET +
+                        mTextPaint.measureText(textArray[i]) / 2).toFloat()
+
+            canvas?.drawText(textArray[i], startX, startY, mTextPaint)
         }
     }
 
@@ -146,7 +174,7 @@ class AnalogClockView @JvmOverloads constructor(
         canvas?.rotate(angle)
         canvas?.drawLine(
             0f,
-            arrowLength / partsCount, 0f,
+            arrowLength / (partsCount * 2), 0f,
             arrowLength / partsCount - arrowLength,
             paint
         )
@@ -172,7 +200,7 @@ class AnalogClockView @JvmOverloads constructor(
 
         radius = result / 2.0f
         clockTagLength = radius / 12
-        secondLength = 2 * radius * pointerRatio
+        secondLength = 2 * radius * GOLDEN_RATIO
         minuteLength = secondLength * GOLDEN_RATIO / pointerRatio
         hourLength = minuteLength * GOLDEN_RATIO
 
@@ -205,6 +233,7 @@ class AnalogClockView @JvmOverloads constructor(
         private const val HOUR_STEP = 30f
         private const val SECOND_STEP = 6f
         private const val DEFAULT_OFFSET = 5
+        private const val DEFAULT_TEXT_OFFSET = 0.95
         private const val CENTER = 0f
         private const val CIRCLE_DEGREES = 360f
         private const val GOLDEN_RATIO = 0.62f
